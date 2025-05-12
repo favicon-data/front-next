@@ -109,6 +109,7 @@ interface Dataset {
   name: string
   datasetTheme: DatasetTheme
   downloadSet: DownloadSet[]
+  trend: string | null
 }
 
 interface CategoryRatio {
@@ -119,6 +120,16 @@ interface CategoryRatio {
 interface CategoryRatios {
   [key: string]: CategoryRatio
 }
+
+type Trend = {
+  id: number;
+  rank: number;
+  rankDate: string;
+  trendStatus: "상승" | "하락" | "유지";
+  dataset: {
+    datasetId: number;
+  };
+};
 
 // 카테고리 아이콘 컴포넌트
 const CategoryIcon = ({ category }: { category: string }) => {
@@ -295,9 +306,44 @@ export default function Home() {
       image: categoryImage,
       description: dataset.description || `${dataset.title} 데이터셋입니다.`,
       tags: [dataset.name, categoryInfo.name, dataset.organization?.split(".")[0] || ""],
-      trend: "유지", // 기본값
+      trend: dataset.trend || "유지", // 기본값
     }
   }
+
+  // 오늘 날짜 데이터 트렌드 가져오기
+  useEffect(() => {
+    const fetchTrends = async () => {
+      const today = new Date();
+      const formattedDate = today.toISOString().split("T")[0]; // 'YYYY-MM-DD' 형식
+
+      try {
+        const response = await fetch(`http://54.180.238.119:8080/trend/daily?date=${formattedDate}`);
+        if (!response.ok) {
+          throw new Error("트렌드 데이터를 불러오는데 실패했습니다.");
+        }
+
+        const trendData: Trend[] = await response.json();
+
+        // 각 topDatasets에 trend 매핑
+        setTopDatasets((prev) =>
+            prev.map((dataset) => {
+              const matchedTrend = trendData.find((t) => t.dataset.datasetId === dataset.datasetId);
+              return {
+                ...dataset,
+                trend: matchedTrend?.trendStatus || "유지", // '상승', '하락', '유지'
+              };
+            })
+        );
+      } catch (err) {
+        console.error("트렌드 데이터 오류:", err);
+      }
+    };
+
+    if (topDatasets.length > 0) {
+      fetchTrends();
+    }
+  }, [topDatasets]);
+
 
   return (
       <div className="min-h-screen bg-gray-50">
